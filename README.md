@@ -19,6 +19,10 @@ icc -c libc.c
 ifort -fpp -warn all libc.o test_libc.f90 -o test_libc
 ```
 
+## Examples
+
+See the file `test_libc.f90` for usage examples following those available at http://www.cplusplus.com/reference/ctime/
+
 ## Spurious behavior
 
 * When compiled with gfortran, if `mktime` (or its Fortran wrapper) is called twice it somehow corrupts memory and issues a [double free or corruption error](https://jblevins.org/log/double-free). If the size of the `tm` struct is increased from 9 to at least 11 integers, then it works properly on both compilers. See also:
