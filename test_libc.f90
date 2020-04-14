@@ -38,22 +38,22 @@ module libc
         
         ! Generate random number
         ! int rand (void);
-        ! integer(c_int) function rand() bind(c,name='rand')
-        !     import c_int
-        ! end function
+        integer(c_int) function rand() bind(c,name='rand')
+            import c_int
+        end function
 
         ! Initialize random number generator
         ! void srand (unsigned int seed);
-        ! subroutine srand(seed) bind(c,name='srand')
-        !     import c_int
-        !     integer(c_int), value :: seed
-        !         !! An integer value to be used as seed by the pseudo-random number generator algorithm.
-        ! end subroutine
+        subroutine srand(seed) bind(c,name='srand')
+            import c_int
+            integer(c_int), value :: seed
+                !! An integer value to be used as seed by the pseudo-random number generator algorithm.
+        end subroutine
 
         ! Maximum value returned by rand
-        ! integer(c_int) function get_rand_max() bind(c,name='get_rand_max')
-        !     import c_int
-        ! end function
+        integer(c_int) function get_rand_max() bind(c,name='get_rand_max')
+            import c_int
+        end function
 
 
         !---------------------------
@@ -89,6 +89,20 @@ module libc
             integer(c_size_t), intent(in), value :: num !! number of objects
             integer(c_size_t), intent(in), value :: size !! size of each object (in bytes)
         end function
+
+        !-----------------------
+        ! Searching and sorting
+        !-----------------------
+
+        ! Sort elements of array
+        ! void qsort (void* base, size_t num, size_t size,
+        !             int (*compar)(const void*,const void*));
+        subroutine qsort(base, num, size, compar) bind(c,name='qsort')
+            import c_ptr, c_size_t, c_funptr
+            type(c_ptr), value :: base
+            integer(c_size_t), value :: num, size
+            type(c_funptr), value :: compar
+        end subroutine
 
     end interface
 
@@ -279,21 +293,15 @@ contains
                 integer(c_size_t) :: res !! The length of string. 
             end function
         end interface
-        character(len=1,kind=c_char), pointer :: f_str(:)
+        character(len=:,kind=c_char), pointer :: f_str
         character(len=:,kind=c_char), allocatable :: res
         integer(c_int) :: len
         type(c_ptr) :: c_str
-        integer(c_int) :: i
 
         c_str = strerror(errnum)
-        len = int(strlen(c_str),c_int)
-        allocate(f_str(int(len,c_int)))
-
-        call c_f_pointer(c_str,f_str,[len])
-        allocate(character(kind=c_char,len=len) :: res)
-        do i = 1, len
-            res(i:i) = f_str(i)
-        end do
+        len = strlen(c_str)
+        call c_f_pointer(c_str,f_str)
+        res = f_str(1:len-1)
     end function
 
     function fasctime(timeptr) result(res)
@@ -659,6 +667,87 @@ contains
         write(*,'(A)') "The following error occurred: "//fstrerror(get_errno())
         call perror("The following error occurred"//c_null_char)
     end subroutine
+
+
+    subroutine rand_example
+        integer(c_int) :: isecret, iguess
+        integer(c_int) :: count
+
+        call system_clock(count)
+        call srand(count)
+
+        isecret = mod(rand(),10) + 1
+
+        do
+            write(*,'(A)',advance='no') "Guess the number (1 to 10): "
+            read(*,*) iguess
+            if (isecret < iguess) then
+                write(*,*) "The secret number is lower"
+            else if (isecret > iguess) then
+                write(*,*) "The secret number is higher"
+            end if
+
+            if (isecret == iguess) exit
+        end do
+
+        write(*,*) "Congratulations!"
+    end subroutine
+
+    subroutine srand_example
+        integer(c_int) :: count
+
+        call srand(1)
+        write(*,*) "First number: ", mod(rand(),100)
+        call system_clock(count)
+        call srand(count)
+        write(*,*) "Random number: ", mod(rand(),100)
+        call srand(1)
+        write(*,*) "Again the first number: ", mod(rand(),100)
+    end subroutine
+
+    ! int compar (const void* p1, const void* p2);
+    ! integer(c_int) function compare(a,b) bind(c)
+    !     type(c_ptr), intent(in), value :: a, b
+    !     integer(c_int), pointer :: a_, b_
+
+    !     call c_f_pointer(a,a_)
+    !     call c_f_pointer(b,b_)
+    !     print *, a_, b_
+    !     compare = a_ - b_
+    ! end function
+
+    integer(c_int) function compare(a,b) bind(c)
+        integer(c_int), intent(in) :: a, b
+        compare = a - b
+        ! if (a < b) then
+        !     compare = -1
+        ! else if (a == b) then 
+        !     compare = 0
+        ! else if (a > b) then
+        !     compare = 1
+        ! end if
+    end function
+
+    ! see also https://stackoverflow.com/questions/20941575/sorting-in-fortran-undefined-reference-to-qsort
+    subroutine qsort_example
+
+        ! integer(c_int), pointer :: values(:) 
+        integer(c_int), target :: values(6) 
+        type(c_ptr) :: ptr
+
+        write(*,*) new_line('a')//"qsort_example"
+
+        ! ptr = cmalloc(6*c_sizeof(values(1)))
+
+        ! call c_f_pointer(ptr,values,[6])
+        values = [40, 10, 100, 90, 20, 25]
+
+        write(*,"(6(I0,:,X))") values
+        ! call qsort(ptr,6_c_size_t,c_sizeof(values(1)),c_funloc(compare))
+        call qsort(c_loc(values(1)),6_c_size_t,c_sizeof(values(1)),c_funloc(compare))
+        write(*,"(6(I0,:,X))") values
+    end subroutine
+
 end module
 
 program test_libc
@@ -689,6 +778,13 @@ program test_libc
     ! <errno.h>
     !
     call strerror_example
+    
+
+    !
+    ! <stdlib.h>
+    ! call rand_example
+    call srand_example
+    call qsort_example
     stop
 
     p_b = cmalloc(c_sizeof(a)*5)
